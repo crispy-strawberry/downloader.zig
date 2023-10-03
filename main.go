@@ -24,22 +24,12 @@ func main() {
 }
 
 func Download(link string) error {
-	// out, err := os.Create(filename)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer out.Close()
-
 	resp, err := http.Get(link)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	// _, err = io.Copy(out, resp.Body)
-	// if err != nil {
-	// 	return err
-	// }
 
 	uncompressedStream, err := xz.NewReader(resp.Body)
 	if err != nil {
