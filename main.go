@@ -1,35 +1,29 @@
 package main
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 
 	"archive/tar"
-
 	"github.com/ulikunitz/xz"
-
-	"github.com/PuerkitoBio/goquery"
 )
 
 func main() {
-	link, filename, err := GetDownloadLink()
+	link, err := GetDownloadLink("master", "riscv64-linux")
 	if err != nil {
 		panic(err)
 	}
 
-	err = Download(link, filename)
+	err = Download(link)
 	if err != nil {
 		panic(err)
 	}
-
-	fmt.Println(link, filename, err)
-
 }
 
-func Download(link, filename string) error {
+func Download(link string) error {
 	// out, err := os.Create(filename)
 	// if err != nil {
 	// 	return err
@@ -85,34 +79,57 @@ func Download(link, filename string) error {
 				header.Typeflag,
 				header.Name)
 		}
-
 	}
 
 	return nil
 }
 
-func GetDownloadLink() (string, string, error) {
-	res, err := http.Get("https://ziglang.org/download/")
+// func GetDownloadLink() (string, string, error) {
+// 	res, err := http.Get("https://ziglang.org/download/")
+// 	if err != nil {
+// 		return "", "", err
+// 	}
+// 	defer res.Body.Close()
+
+// 	if res.StatusCode != 200 {
+// 		return "", "", fmt.Errorf("status code error: %d %s", res.StatusCode, res.Status)
+// 	}
+
+// 	doc, err := goquery.NewDocumentFromReader(res.Body)
+// 	if err != nil {
+// 		return "", "", err
+// 	}
+// 	table_body := doc.Find("table tbody")
+
+// 	link_element := table_body.First().Children().Eq(6).Find("a").First()
+// 	link, ok := link_element.Attr("href")
+// 	filename := link_element.Text()
+// 	if ok {
+// 		return link, filename, nil
+// 	}
+// 	return "", "", errors.New("failed to get link")
+// }
+
+func GetDownloadLink(version, platform string) (string, error) {
+	resp, err := http.Get("https://ziglang.org/download/index.json")
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	defer res.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("status code error: %s, %d", resp.Status, resp.StatusCode)
+	}
 
-	if res.StatusCode != 200 {
-		return "", "", fmt.Errorf("status code error: %d %s", res.StatusCode, res.Status)
+	decoder := json.NewDecoder(resp.Body)
+	var version_doc versionDocument
+	decoder.Decode(&version_doc)
+	platform_info, ok := version_doc[version][platform].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("could not find tarball for version: %s and platform: %s", version, platform)
 	}
-
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return "", "", err
-	}
-	table_body := doc.Find("table tbody")
-
-	link_element := table_body.First().Children().Eq(6).Find("a").First()
-	link, ok := link_element.Attr("href")
-	filename := link_element.Text()
-	if ok {
-		return link, filename, nil
-	}
-	return "", "", errors.New("failed to get link")
+	link := platform_info["tarball"].(string)
+	return link, nil
 }
+
+type versionDocument = map[string]versionInfo
+type versionInfo = map[string]any
